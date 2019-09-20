@@ -1,1 +1,1 @@
-aarch64-linux-gnu-g++ tflite-demo.cpp -static -O2 -I../tensorflow/ -I../tensorflow/tensorflow/lite/tools/make/downloads/flatbuffers/include -L. -ltensorflow-lite -lrt -ldl -pthread -lm -std=gnu++11 -fPIC -o tflite-demo
+aarch64-linux-gnu-g++ tflite-demo.cpp -static -O2 -I../tensorflow/ -I./opencv_libs -I../tensorflow/tensorflow/lite/tools/make/downloads/flatbuffers/include -L. -ltensorflow-lite -lrt -ldl -pthread -lm -L./opencv_libs/lib -lzlib -llibjasper -llibtiff -lopencv_core -lopencv_highgui -lopencv_imgproc -llibjpeg -llibpng -std=c++11 -fPIC -o tflite-demo

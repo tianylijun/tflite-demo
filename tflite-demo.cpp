@@ -5,6 +5,8 @@
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model.h"
 #include "tensorflow/lite/tools/gen_op_registration.h"
+#include "tensorflow/lite/version.h"
+#include <opencv2/opencv.hpp>
 
 #define KDRED "\u001b[31m"
 #define KBLUH "\u001b[38;5;6m"
@@ -16,7 +18,7 @@
 #define KYEL  "\033[33m"
 #define KBLU  "\033[34m"
 
-static void print_progressbar(unsigned int barLen, unsigned int curPos, unsigned int total, char *desc)
+static void print_progressbar(unsigned int barLen, unsigned int curPos, unsigned int total, const char *desc)
 {
     printf("\r");
     curPos++;
@@ -33,6 +35,7 @@ static void print_progressbar(unsigned int barLen, unsigned int curPos, unsigned
 
 int main(int argc, char*argv[])
 {
+	printf(KGRN "TF ver: %s, TFLITE_SCHEMA_VERSION: %d\n" KNRM, TF_VERSION_STRING, TFLITE_SCHEMA_VERSION);
 	int numThreads = 1;
     std::unique_ptr<tflite::FlatBufferModel> model = tflite::FlatBufferModel::BuildFromFile(argv[1]);
     if(!model)
@@ -60,7 +63,7 @@ int main(int argc, char*argv[])
     std::cout << "input(0) name: " << interpreter->GetInputName(0) << "\n";
 
     int t_size = interpreter->tensors_size();
-    #if 0
+    #if 1
     for (int i = 0; i < t_size; i++) {
       if (interpreter->tensor(i)->name)
         std::cout << i << ": " << interpreter->tensor(i)->name << ", "
@@ -106,6 +109,8 @@ int main(int argc, char*argv[])
     int loopCnt = 10;
 
     float* input = interpreter->typed_input_tensor<float>(0);
+    cv::Mat img = cv::imread("/sdcard/lj/112.png", 0);
+    printf("-- [%d %d] --\n", img.cols, img.rows);
 
     for (int loop = 0 ; loop < loopCnt; loop++)
     {
