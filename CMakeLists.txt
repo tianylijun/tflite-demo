@@ -47,3 +47,6 @@ SET(CMAKE_EXE_LINKER_FLAGS "-static")
 
 add_executable(tflite-demo tflite-demo.cpp)
 target_link_libraries(tflite-demo tensorflow-lite ${OpenCV_LIBS})
+
+add_executable(tflite-demo-list tflite-demo-list.cpp)
+target_link_libraries(tflite-demo-list tensorflow-lite ${OpenCV_LIBS})

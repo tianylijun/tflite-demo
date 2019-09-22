@@ -1,5 +1,4 @@
 #!/bin/bash
-
 mkdir -p build-linux
 pushd build-linux
 mkdir -p arm64-v8a
@@ -9,3 +8,4 @@ make -j4
 popd
 popd
 cp build-linux/arm64-v8a/tflite-demo /media/psf/Home/nfs/
+cp build-linux/arm64-v8a/tflite-demo-list /media/psf/Home/nfs/

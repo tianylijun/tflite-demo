@@ -7,6 +7,7 @@
 #include "tensorflow/lite/tools/gen_op_registration.h"
 #include "tensorflow/lite/version.h"
 #include <opencv2/opencv.hpp>
+#include <arm_neon.h>
 
 #define KDRED "\u001b[31m"
 #define KBLUH "\u001b[38;5;6m"
@@ -33,10 +34,62 @@ static void print_progressbar(unsigned int barLen, unsigned int curPos, unsigned
         printf("\n");
 }
 
+static void showResult(float *pOut, uint32_t out_size)
+{
+    for(int i = 0 ; i < out_size; i++)
+    {
+        if ((0 != i)&& (0 == i % 16))
+            printf("\n");
+        printf("%10.6f, ", pOut[i]);
+    }
+    printf("\n");
+}
+
+static void from_y_normal(unsigned char* pY, int w, int h, float* dst, const float mean, const float scale, unsigned num_threads)
+{
+    int size = w * h;
+    int nn = size >> 3;
+    int i = 0;
+    int remain = size & 7;
+
+    float32x4_t mean32x4  = vdupq_n_f32(mean);
+    float32x4_t scale32x4 = vdupq_n_f32(scale);
+    float* ptr0 = dst;
+
+    #pragma omp parallel for num_threads(num_threads)
+    for ( i = 0; i < nn; i++)
+    {
+        float *pdst = ptr0 + 8*i;
+
+        uint8x8_t _y = vld1_u8(pY + 8*i);
+        uint16x8_t _y16  = vmovl_u8(_y);
+
+        float32x4_t _ylow  = vcvtq_f32_u32(vmovl_u16(vget_low_u16(_y16)));
+        float32x4_t _yhigh = vcvtq_f32_u32(vmovl_u16(vget_high_u16(_y16)));
+
+        _ylow  = vsubq_f32(_ylow, mean32x4);
+        _yhigh = vsubq_f32(_yhigh, mean32x4);
+
+        _ylow  = vmulq_f32(_ylow, scale32x4);
+        _yhigh = vmulq_f32(_yhigh, scale32x4);
+
+        vst1q_f32(pdst,   _ylow);
+        vst1q_f32(pdst+4, _yhigh);
+    }
+
+    pY   += 8*nn;
+    ptr0 += 8*nn;
+
+    for (i = 0; i < remain; i++)
+        *ptr0++ = ((float)*pY++ - mean)*scale;
+
+    return;
+}
+
 int main(int argc, char*argv[])
 {
-	printf(KGRN "TF ver: %s, TFLITE_SCHEMA_VERSION: %d\n" KNRM, TF_VERSION_STRING, TFLITE_SCHEMA_VERSION);
-	int numThreads = 1;
+    printf(KGRN "TF ver: %s, TFLITE_SCHEMA_VERSION: %d\n" KNRM, TF_VERSION_STRING, TFLITE_SCHEMA_VERSION);
+    int num_threads = 1;
     std::unique_ptr<tflite::FlatBufferModel> model = tflite::FlatBufferModel::BuildFromFile(argv[1]);
     if(!model)
     {
@@ -52,18 +105,19 @@ int main(int argc, char*argv[])
         printf("Failed to construct interpreter\n");
         exit(0);
     }
-    
+
     interpreter->UseNNAPI(false);
     interpreter->SetAllowFp16PrecisionForFp32(false);
-    interpreter->SetNumThreads(numThreads);
+    interpreter->SetNumThreads(num_threads);
 
     std::cout << "tensors size: " << interpreter->tensors_size() << "\n";
     std::cout << "nodes size: " << interpreter->nodes_size() << "\n";
     std::cout << "inputs: " << interpreter->inputs().size() << "\n";
     std::cout << "input(0) name: " << interpreter->GetInputName(0) << "\n";
+    std::cout << "output(0) name: " << interpreter->GetOutputName(0) << "\n";
 
     int t_size = interpreter->tensors_size();
-    #if 1
+
     for (int i = 0; i < t_size; i++) {
       if (interpreter->tensor(i)->name)
         std::cout << i << ": " << interpreter->tensor(i)->name << ", "
@@ -72,7 +126,7 @@ int main(int argc, char*argv[])
                   << interpreter->tensor(i)->params.scale << ", "
                   << interpreter->tensor(i)->params.zero_point << "\n";
     }
-    #endif
+
     if (interpreter->AllocateTensors() != kTfLiteOk)
     {
         std::cout << "Failed to allocate tensors!" << "\n";
@@ -106,11 +160,12 @@ int main(int argc, char*argv[])
 
     struct timeval beg, end;
     gettimeofday(&beg, nullptr);
-    int loopCnt = 10;
+    int loopCnt = 1;
 
     float* input = interpreter->typed_input_tensor<float>(0);
     cv::Mat img = cv::imread("/sdcard/lj/112.png", 0);
-    printf("-- [%d %d] --\n", img.cols, img.rows);
+    from_y_normal(img.data, img.cols, img.rows, input, 127.5, 0.0078125, num_threads);
+    img.release();
 
     for (int loop = 0 ; loop < loopCnt; loop++)
     {
@@ -125,8 +180,9 @@ int main(int argc, char*argv[])
            (end.tv_sec*1000000 + end.tv_usec - beg.tv_sec*1000000 - beg.tv_usec)/1000, 
            (end.tv_sec*1000000 + end.tv_usec - beg.tv_sec*1000000 - beg.tv_usec)/(1000.0*loopCnt),
            loopCnt,
-           numThreads,
+           num_threads,
            output);
 
+    showResult(output, 128);
     return 0;
 }
