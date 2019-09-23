@@ -6,8 +6,13 @@
 #include "tensorflow/lite/model.h"
 #include "tensorflow/lite/tools/gen_op_registration.h"
 #include "tensorflow/lite/version.h"
+#include "tensorflow/lite/kernels/kernel_util.h"
 #include <opencv2/opencv.hpp>
 #include <arm_neon.h>
+
+using namespace std;
+using namespace cv;
+using namespace tflite;
 
 #define KDRED "\u001b[31m"
 #define KBLUH "\u001b[38;5;6m"
@@ -112,12 +117,51 @@ int main(int argc, char*argv[])
 
     std::cout << "tensors size: " << interpreter->tensors_size() << "\n";
     std::cout << "nodes size: " << interpreter->nodes_size() << "\n";
-    std::cout << "inputs: " << interpreter->inputs().size() << "\n";
-    std::cout << "input(0) name: " << interpreter->GetInputName(0) << "\n";
-    std::cout << "output(0) name: " << interpreter->GetOutputName(0) << "\n";
-
     int t_size = interpreter->tensors_size();
 
+    const std::vector<int> inputs = interpreter->inputs();
+    const std::vector<int> outputs = interpreter->outputs();
+
+    std::cout << "number of inputs: " << inputs.size() << "\n";
+    std::cout << "number of outputs: " << outputs.size() << "\n";
+    std::vector<int> insSize;
+    std::vector<int> outsSize;
+    printf("-------------------\n");
+    int inIdx = 0;
+    for (auto in_tensor_idx: inputs)
+    {
+        int in_size = 1;
+        printf("In:%d name:%s\n", in_tensor_idx, interpreter->GetInputName(inIdx++));
+        int indims = NumDimensions(interpreter->tensor(in_tensor_idx));
+        for (int i = 0; i < indims; ++i)
+        {
+            in_size *= SizeOfDimension(interpreter->tensor(in_tensor_idx), i);
+            if (0 == i)
+                printf("[");
+            printf(" %d", SizeOfDimension(interpreter->tensor(in_tensor_idx), i));
+        }
+        printf("] %d\n", in_size);
+        insSize.push_back(in_size);
+    }
+    printf("-------------------\n");
+    int outIdx = 0;
+    for (auto out_tensor_idx: outputs)
+    {
+        int out_size = 1;
+        printf("Out:%d name:%s\n", out_tensor_idx, interpreter->GetOutputName(outIdx++));
+        int outdims = NumDimensions(interpreter->tensor(out_tensor_idx));
+        for (int i = 0; i < outdims; ++i)
+        {
+            out_size *= SizeOfDimension(interpreter->tensor(out_tensor_idx), i);
+            if (0 == i)
+                printf("[");
+            printf(" %d", SizeOfDimension(interpreter->tensor(out_tensor_idx), i));
+        }
+        printf("] %d\n", out_size);
+        outsSize.push_back(out_size);
+    }
+    printf("-------------------\n");
+#if 0
     for (int i = 0; i < t_size; i++) {
       if (interpreter->tensor(i)->name)
         std::cout << i << ": " << interpreter->tensor(i)->name << ", "
@@ -126,7 +170,7 @@ int main(int argc, char*argv[])
                   << interpreter->tensor(i)->params.scale << ", "
                   << interpreter->tensor(i)->params.zero_point << "\n";
     }
-
+#endif
     if (interpreter->AllocateTensors() != kTfLiteOk)
     {
         std::cout << "Failed to allocate tensors!" << "\n";
@@ -141,11 +185,6 @@ int main(int argc, char*argv[])
     int wanted_channels = dims->data[3];
     printf("Model In: [%d %d %d]\n", wanted_channels, wanted_height, wanted_width);
 
-	const std::vector<int> inputs = interpreter->inputs();
-	const std::vector<int> outputs = interpreter->outputs();
-
-    std::cout << "number of inputs: " << inputs.size() << "\n";
-    std::cout << "number of outputs: " << outputs.size() << "\n";
     printf("input tensor type: %d in [%d(kTfLiteFloat32), %d(kTfLiteUInt8)]\n", interpreter->tensor(inputIdx)->type, kTfLiteFloat32, kTfLiteUInt8);
 	switch (interpreter->tensor(inputIdx)->type)
 	{
@@ -183,6 +222,6 @@ int main(int argc, char*argv[])
            num_threads,
            output);
 
-    showResult(output, 128);
+    showResult(output, outsSize[0]);
     return 0;
 }
