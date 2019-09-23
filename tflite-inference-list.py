@@ -18,12 +18,23 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+import sys
 import time
 import argparse
 import numpy as np
 import cv2
 
 from tensorflow.lite.python.interpreter import Interpreter
+
+def mkdir(path):
+    path=path.rstrip("\\")
+    isExists=os.path.exists(path)
+    if not isExists:
+        os.makedirs(path)
+        return True
+    else:
+        return False
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -53,8 +64,6 @@ if __name__ == '__main__':
   interpreter = Interpreter(model_path=args.model_file)
   interpreter.allocate_tensors()
 
-  #interpreter.SetNumThreads(8);
-
   input_details = interpreter.get_input_details()
   print(input_details)
   output_details = interpreter.get_output_details()
@@ -67,38 +76,37 @@ if __name__ == '__main__':
   width = input_details[0]['shape'][2]
   #print(height)
   #print(width)
-  img = cv2.imread(args.image, 0)
-  #print(img.shape[0])
-  #print(img.shape[1])
-  
-  #imgs=[]
-  #imgs.append(img)
-  #imgs.append(img)
-  #imgs = np.array(imgs)
-  #print(imgs.shape)
-  
-  # add N dim
-  input_data = np.expand_dims(img, axis=2)
-  input_data = np.expand_dims(input_data, axis=0)
-  print(input_data.shape)
-  print("===========================")
+  img_list=[]
+  with open(args.image, 'r') as f:
+      for line in f:
+          img_list.append(line.strip())
+  #print(img_list)
+  i = 0
+  for img_path in img_list:
+    print(img_path)
+    out_img_path = img_path.replace("/Users/leejohnnie/nfs/lfw-matlab-112x112", "./result")
+    #out_img_path = img_path.replace("/Users/leejohnnie/dataset", "./result")
+    print(out_img_path)
+    out_img_path = os.path.splitext(out_img_path)
+    print(out_img_path)
+    newname = out_img_path[0] + ".bin"
+    print(newname)
+    mkdir(os.path.dirname(newname))
+    start = time.time()
+    img = cv2.imread(img_path, 0)
+    input_data = np.expand_dims(img, axis=2)
+    input_data = np.expand_dims(input_data, axis=0)
+    print(input_data.shape)
+    print("===========================")
+    i = i + 1
+    print(i)
 
-  start = time.time()
+    if floating_model:
+      input_data = (np.float32(input_data) - args.input_mean) * args.input_std
+    interpreter.set_tensor(input_details[0]['index'], input_data)
 
-  if floating_model:
-    input_data = (np.float32(input_data) - args.input_mean) * args.input_std
-  interpreter.set_tensor(input_details[0]['index'], input_data)
-  #for num in range(10):
-  interpreter.invoke()
-  output_data = interpreter.get_tensor(output_details[0]['index'])
-
-  stop = time.time()
-  print("time(s):", stop-start)
-  #print(output_data)
-  output = output_data.reshape((8,16))
-  for j in range(len(output)):
-    for i in range(len(output[j])):
-      print('%10.6f'%output[j][i], end=", ")
-    print()
-  #results = np.squeeze(output_data)
-  #print(results)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    output_data.astype('float32').tofile(newname)
+    stop = time.time()
+    print("time(s):", stop-start)
